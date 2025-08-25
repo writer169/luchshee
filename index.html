@@ -224,14 +224,17 @@
     </div>
 
     <script>
-        // Ждем полной загрузки страницы
         document.addEventListener('DOMContentLoaded', function() {
             let attemptCount = 0;
-            
-            function getPasswordSum(pwd) {
-                return pwd.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-            }
-            
+            const maxAttempts = 25; // Максимальное количество попыток
+
+            // Получаем элементы DOM
+            const form = document.getElementById('registrationForm');
+            const passwordInput = document.getElementById('password');
+            const attemptElement = document.getElementById('attemptCount');
+            const errorDiv = document.getElementById('errorMessage');
+            const submitBtn = form.querySelector('.btn');
+
             const passwordRequirements = [
                 // Реальные требования
                 {
@@ -321,103 +324,88 @@
                 }
             ];
 
-            // Обработчик формы
-            const form = document.getElementById('registrationForm');
-            if (form) {
-                form.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    console.log('Form submitted!'); // Для отладки
-                    
-                    const password = document.getElementById('password').value;
-                    const username = document.getElementById('username').value;
-                    
-                    console.log('Username:', username, 'Password length:', password.length); // Для отладки
-                    
-                    if (!username.trim()) {
-                        showError("Пожалуйста, введите логин");
-                        return;
-                    }
-                    
-                    if (!password.trim()) {
-                        showError("Пожалуйста, введите пароль");
-                        return;
-                    }
-                    
-                    attemptCount++;
-                    const attemptElement = document.getElementById('attemptCount');
-                    if (attemptElement) {
-                        attemptElement.textContent = `Попытка: ${attemptCount}`;
-                    }
-                    
-                    console.log('Attempt:', attemptCount); // Для отладки
-                    
-                    // Проверяем требования по порядку
-                    for (let i = 0; i < Math.min(attemptCount, passwordRequirements.length); i++) {
-                        const requirement = passwordRequirements[i];
-                        if (requirement.check(password)) {
-                            const message = typeof requirement.message === 'function' 
-                                ? requirement.message(password) 
-                                : requirement.message;
-                            showError(message);
-                            return;
-                        }
-                    }
-                    
-                    // Если дошли до сюда и все требования пройдены, но это маловероятно...
-                    if (attemptCount > passwordRequirements.length) {
-                        showError("Поздравляем! Ваш пароль почти идеален, но сервер временно недоступен. Попробуйте позже 😄");
-                    }
-                });
-            }
-
             function showError(message) {
-                console.log('Showing error:', message); // Для отладки
-                const errorDiv = document.getElementById('errorMessage');
                 if (errorDiv) {
                     errorDiv.innerHTML = '<div class="error">' + message + '</div>';
                 }
-                
-                // Небольшая анимация тряски формы
                 const container = document.querySelector('.container');
                 if (container) {
                     container.style.animation = 'none';
-                    container.offsetHeight; // Trigger reflow
-                    container.style.animation = null;
+                    void container.offsetWidth; // Trigger reflow
+                    container.style.animation = 'shake 0.5s ease-in-out';
                 }
             }
             
-            // Переключатель видимости пароля (неактивен, так как пароль уже видим)
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const password = document.getElementById('password').value;
+                const username = document.getElementById('username').value;
+                
+                if (!username.trim()) {
+                    showError("Пожалуйста, введите логин");
+                    return;
+                }
+                
+                if (!password.trim()) {
+                    showError("Пожалуйста, введите пароль");
+                    return;
+                }
+                
+                attemptCount++;
+                if (attemptElement) {
+                    attemptElement.textContent = `Попытка: ${attemptCount}`;
+                }
+                
+                // ИСПРАВЛЕННАЯ ЛОГИКА: всегда ищем первую ошибку
+                let errorFound = false;
+                for (const requirement of passwordRequirements) {
+                    if (requirement.check(password)) {
+                        const message = typeof requirement.message === 'function' 
+                            ? requirement.message(password) 
+                            : requirement.message;
+                        showError(message);
+                        errorFound = true;
+                        break; // Нашли ошибку, выходим из цикла
+                    }
+                }
+                
+                // Если все требования выполнены
+                if (!errorFound) {
+                    showError("Поздравляем! Ваш пароль почти идеален, но сервер временно недоступен. Попробуйте позже 😄");
+                }
+                
+                // НОВАЯ ЛОГИКА: Проверяем, не закончились ли попытки, ПОСЛЕ выдачи подсказки
+                if (attemptCount >= maxAttempts) {
+                    const endMessage = "Количество попыток закончилось, попробуйте завтра.";
+                    const currentError = errorDiv.querySelector('.error');
+                    
+                    if (currentError) {
+                        // Добавляем сообщение к уже существующей ошибке
+                        currentError.innerHTML += `<br><br><strong>${endMessage}</strong>`;
+                    } else {
+                        // Если по какой-то причине ошибки нет, показываем только это сообщение
+                        showError(endMessage);
+                    }
+                    
+                    submitBtn.disabled = true; // Блокируем кнопку
+                }
+            });
+
+            // Скрываем кнопку переключения видимости пароля, т.к. поле текстовое
             const toggleBtn = document.getElementById('togglePassword');
             if (toggleBtn) {
-                toggleBtn.style.display = 'none'; // Скрываем кнопку, так как пароль уже текстовый
+                toggleBtn.style.display = 'none';
             }
             
             // Очистка ошибки при начале ввода
-            const passwordInput = document.getElementById('password');
             if (passwordInput) {
                 passwordInput.addEventListener('input', function() {
-                    const errorDiv = document.getElementById('errorMessage');
                     if (errorDiv) {
                         errorDiv.innerHTML = '';
                     }
                 });
-                
-                // Автоматически ставим курсор в конец при фокусе
-                passwordInput.addEventListener('focus', function() {
-                    setTimeout(() => {
-                        this.setSelectionRange(this.value.length, this.value.length);
-                    }, 0);
-                });
             }
-            
-            // Пасхалка для особо настойчивых
-            document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey && e.shiftKey && (e.key === 'П' || e.key === 'P')) {
-                    showError('Читерство запрещено правилами приложения! 🚫');
-                }
-            });
-
-            console.log('Script loaded successfully!'); // Для отладки
         });
     </script>
 </body>

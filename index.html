@@ -81,27 +81,8 @@
             align-items: center;
         }
 
-        .password-container input {
-            padding-right: 40px;
-        }
-
-        .show-password-btn {
-            position: absolute;
-            right: 8px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 4px;
-            color: #666;
-            user-select: none;
-        }
-
-        .show-password-btn:hover {
-            color: #333;
-        }
-
-        input {
+        /* Общие стили для input и textarea */
+        input, textarea {
             width: 100%;
             padding: 10px 12px;
             border: 2px solid #ddd;
@@ -109,13 +90,24 @@
             font-size: 14px;
             transition: all 0.3s ease;
             background: rgba(255, 255, 255, 0.9);
-            font-family: monospace;
+            font-family: monospace; /* Моноширинный шрифт для пароля */
+        }
+        
+        /* Стиль для textarea, чтобы разрешить вертикальное изменение размера */
+        textarea {
+            resize: vertical;
+            min-height: 45px; /* Начальная высота */
+            line-height: 1.4;
         }
 
-        input:focus {
+        input:focus, textarea:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        .show-password-btn {
+            display: none; /* Кнопка больше не нужна, т.к. textarea всегда показывает текст */
         }
 
         .btn {
@@ -201,7 +193,7 @@
             <div class="form-group">
                 <label for="password">Пароль:</label>
                 <div class="password-container">
-                    <input type="text" id="password" name="password" required autocomplete="off">
+                    <textarea id="password" name="password" required autocomplete="off" rows="2"></textarea>
                     <button type="button" class="show-password-btn" id="togglePassword">👁️</button>
                 </div>
             </div>
@@ -226,9 +218,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             let attemptCount = 0;
-            const maxAttempts = 25; // Максимальное количество попыток
+            const maxAttempts = 25;
+            let isCompleted = false; // Флаг для отслеживания успешного прохождения
 
-            // Получаем элементы DOM
             const form = document.getElementById('registrationForm');
             const passwordInput = document.getElementById('password');
             const attemptElement = document.getElementById('attemptCount');
@@ -236,7 +228,6 @@
             const submitBtn = form.querySelector('.btn');
 
             const passwordRequirements = [
-                // Реальные требования
                 {
                     check: (pwd) => pwd.length < 8,
                     message: "Пароль должен содержать минимум 8 символов"
@@ -245,9 +236,9 @@
                     check: (pwd) => !/[A-Z]/.test(pwd),
                     message: "Пароль должен содержать хотя бы одну заглавную букву"
                 },
-                {
+                { // ИЗМЕНЕНИЕ: Уточнено сообщение
                     check: (pwd) => !/[a-z]/.test(pwd),
-                    message: "Пароль должен содержать хотя бы одну строчную букву"
+                    message: "Пароль должен содержать хотя бы одну строчную латинскую букву (a-z)"
                 },
                 {
                     check: (pwd) => !/\d/.test(pwd),
@@ -269,7 +260,6 @@
                     check: (pwd) => !/[0-9].*[0-9].*[0-9]/.test(pwd),
                     message: "Пароль должен содержать минимум 3 цифры"
                 },
-                // Начинаются абсурдные требования
                 {
                     check: (pwd) => !pwd.toLowerCase().includes('пон') && !pwd.toLowerCase().includes('вто') && !pwd.toLowerCase().includes('сре') && !pwd.toLowerCase().includes('чет') && !pwd.toLowerCase().includes('пят') && !pwd.toLowerCase().includes('суб') && !pwd.toLowerCase().includes('вос'),
                     message: "Пароль должен содержать сокращение дня недели (пон, вто, сре, чет, пят, суб или вос)"
@@ -294,10 +284,7 @@
                     check: (pwd) => !pwd.match(/(.)\1/),
                     message: "Пароль должен содержать хотя бы одну удвоенную букву или цифру (например: aa, 11, bb)"
                 },
-                {
-                    check: (pwd) => pwd.length < 18,
-                    message: "Извините, минимальная длина увеличена до 18 символов по новым стандартам безопасности"
-                },
+                // ИЗМЕНЕНИЕ: Требование 18 символов удалено
                 {
                     check: (pwd) => /(password|пароль|123|qwerty|admin)/i.test(pwd),
                     message: "Пароль не должен содержать распространенные слова (password, пароль, 123, qwerty, admin)"
@@ -331,22 +318,30 @@
                 const container = document.querySelector('.container');
                 if (container) {
                     container.style.animation = 'none';
-                    void container.offsetWidth; // Trigger reflow
+                    void container.offsetWidth;
                     container.style.animation = 'shake 0.5s ease-in-out';
                 }
             }
             
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
+
+                const finalMessage = "Количество попыток закончилось, попробуйте завтра.";
                 
-                const password = document.getElementById('password').value;
+                // ИЗМЕНЕНИЕ: Если все условия были выполнены, следующее нажатие завершает попытки
+                if (isCompleted) {
+                    showError(finalMessage);
+                    submitBtn.disabled = true;
+                    return;
+                }
+                
+                const password = passwordInput.value;
                 const username = document.getElementById('username').value;
                 
                 if (!username.trim()) {
                     showError("Пожалуйста, введите логин");
                     return;
                 }
-                
                 if (!password.trim()) {
                     showError("Пожалуйста, введите пароль");
                     return;
@@ -357,48 +352,32 @@
                     attemptElement.textContent = `Попытка: ${attemptCount}`;
                 }
                 
-                // ИСПРАВЛЕННАЯ ЛОГИКА: всегда ищем первую ошибку
                 let errorFound = false;
                 for (const requirement of passwordRequirements) {
                     if (requirement.check(password)) {
-                        const message = typeof requirement.message === 'function' 
-                            ? requirement.message(password) 
-                            : requirement.message;
-                        showError(message);
+                        showError(requirement.message);
                         errorFound = true;
-                        break; // Нашли ошибку, выходим из цикла
+                        break;
                     }
                 }
                 
-                // Если все требования выполнены
                 if (!errorFound) {
                     showError("Поздравляем! Ваш пароль почти идеален, но сервер временно недоступен. Попробуйте позже 😄");
+                    isCompleted = true; // Устанавливаем флаг, что все пройдено
+                    return; // Выходим, чтобы не сработала проверка на maxAttempts в этот же клик
                 }
                 
-                // НОВАЯ ЛОГИКА: Проверяем, не закончились ли попытки, ПОСЛЕ выдачи подсказки
                 if (attemptCount >= maxAttempts) {
-                    const endMessage = "Количество попыток закончилось, попробуйте завтра.";
                     const currentError = errorDiv.querySelector('.error');
-                    
                     if (currentError) {
-                        // Добавляем сообщение к уже существующей ошибке
-                        currentError.innerHTML += `<br><br><strong>${endMessage}</strong>`;
+                        currentError.innerHTML += `<br><br><strong>${finalMessage}</strong>`;
                     } else {
-                        // Если по какой-то причине ошибки нет, показываем только это сообщение
-                        showError(endMessage);
+                        showError(finalMessage);
                     }
-                    
-                    submitBtn.disabled = true; // Блокируем кнопку
+                    submitBtn.disabled = true;
                 }
             });
 
-            // Скрываем кнопку переключения видимости пароля, т.к. поле текстовое
-            const toggleBtn = document.getElementById('togglePassword');
-            if (toggleBtn) {
-                toggleBtn.style.display = 'none';
-            }
-            
-            // Очистка ошибки при начале ввода
             if (passwordInput) {
                 passwordInput.addEventListener('input', function() {
                     if (errorDiv) {

@@ -1,3 +1,5 @@
+"use client"; // Добавляем директиву для клиентского компонента
+
 import { useState } from 'react';
 
 export default function Home() {
